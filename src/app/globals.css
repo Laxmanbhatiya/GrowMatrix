@@ -1,26 +1,130 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  
+  --font-sans: var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Base Variable Bindings */
+:root {
+  --background: #f5f8f5;
+  --foreground: #142918;
+  
+  --card: #ffffff;
+  --card-foreground: #142918;
+  
+  --popover: #ffffff;
+  --popover-foreground: #142918;
+  
+  --primary: #15803d;
+  --primary-foreground: #ffffff;
+  
+  --secondary: #e2ebd9;
+  --secondary-foreground: #142918;
+  
+  --muted: #edf4ea;
+  --muted-foreground: #55735b;
+  
+  --accent: #e2ebd9;
+  --accent-foreground: #142918;
+  
+  --destructive: #e11d48;
+  --destructive-foreground: #ffffff;
+  
+  --border: #d8e2d4;
+  --input: #b7cbb4;
+  --ring: #15803d;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #070e0a;
+  --foreground: #f0f7f2;
+  
+  --card: #0c1811;
+  --card-foreground: #f0f7f2;
+  
+  --popover: #0c1811;
+  --popover-foreground: #f0f7f2;
+  
+  --primary: #10b981;
+  --primary-foreground: #042f1a;
+  
+  --secondary: #152e20;
+  --secondary-foreground: #f0f7f2;
+  
+  --muted: #0f2217;
+  --muted-foreground: #7ea78a;
+  
+  --accent: #152e20;
+  --accent-foreground: #f0f7f2;
+  
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  
+  --border: #162f21;
+  --input: #244933;
+  --ring: #10b981;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Custom Scrollbar Styles for Enterprise Grid Layouts */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--input);
 }

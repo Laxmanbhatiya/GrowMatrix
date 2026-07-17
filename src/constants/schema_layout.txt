@@ -1,0 +1,1676 @@
+-- GI Prod V2 Database Reference Document - Complete Table Catalog
+-- Co-authored with CoCo
+
+/*
+================================================================================
+GI PROD V2 DATABASE REFERENCE
+================================================================================
+Database:  GI_PROD_DB_BZ
+Schema:    GI_CARBON_PROD_V2_DB
+Purpose:   Carbon credit farming project management system (GreenInfra/Carbon)
+           Manages farmer enrollment, field tracking, polygon mapping, census,
+           surveys, practice adoption, agreements, and quality control for
+           carbon credit generation in agricultural projects.
+
+Total Tables: 63
+Owner: ETL_ROLE
+
+NOTE: No formal PRIMARY KEY or FOREIGN KEY constraints are defined in Snowflake.
+      Relationships below are inferred from naming conventions and column patterns.
+      All tables include EDW_INSERTED_TIMESTAMP and EDW_UPDATED_TIMESTAMP for ETL tracking.
+================================================================================
+*/
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 1: GEOGRAPHIC HIERARCHY (Master Data)                           ║
+-- ║  Hierarchy: Country → Zone → State → Territory → District → Taluka → Village
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_COUNTRY                                                        │
+│ Rows: 1 | Purpose: Top-level geographic entity (country reference)          │
+│ Used for: Root of the geographic hierarchy. Currently single-country system. │
+│ Relationships: Parent of TBLFK_STATE_MASTER via COUNTRY_ID                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   COUNTRY_ID          TEXT        - Unique country identifier
+--   COUNTRY_NAME        TEXT        - Country name
+--   IS_ACTIVE           BOOLEAN     - Soft delete flag
+--   CREATED_BY          TEXT        - Record creator
+--   UPDATED_BY          TEXT        - Last updater
+--   CREATED_AT          TIMESTAMP_NTZ - Creation timestamp
+--   UPDATED_AT          TIMESTAMP_NTZ - Last update timestamp
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ - ETL insert time
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ - ETL update time
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_ZONE_MASTER                                                    │
+│ Rows: 6 | Purpose: Geographic zones (regional groupings of states)          │
+│ Used for: Organizing states into broader operational zones.                  │
+│ Relationships: Parent of TBLFK_STATE_MASTER via ZONE_ID                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ZONE_ID             TEXT        - Unique zone identifier (logical PK)
+--   ZONE_NAME           TEXT        - Zone name
+--   IS_ACTIVE           BOOLEAN     - Soft delete flag
+--   CREATED_BY          TEXT        - Record creator
+--   UPDATED_BY          TEXT        - Last updater
+--   CREATED_AT          TIMESTAMP_NTZ - Creation timestamp
+--   UPDATED_AT          TIMESTAMP_NTZ - Last update timestamp
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_STATE_MASTER                                                   │
+│ Rows: 19 | Purpose: States within the country                               │
+│ Used for: Geographic state-level grouping. Contains language preferences.    │
+│ Relationships:                                                               │
+│   - References TBLFK_ZONE_MASTER via ZONE_ID                                │
+│   - References TBLFK_COUNTRY via COUNTRY_ID                                 │
+│   - References TBLFK_PROJECT_MASTER via PROJECT_ID                          │
+│   - Parent of TBLFK_TERRITORY_MASTER, TBLFK_DISTRICT_MASTER                │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   STATE_ID            TEXT        - Unique state identifier (logical PK)
+--   STATE_NAME          TEXT        - State name
+--   STATE_CODE          TEXT        - State abbreviation code
+--   ZONE_ID             TEXT        - FK to TBLFK_ZONE_MASTER
+--   PROJECT_ID          TEXT        - FK to TBLFK_PROJECT_MASTER
+--   COUNTRY_ID          TEXT        - FK to TBLFK_COUNTRY
+--   IS_ACTIVE           BOOLEAN     - Soft delete flag
+--   STAMP_TYPE          TEXT        - Type of stamp/seal used in state
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   STATE_LANGUAGE       TEXT        - Primary language of the state
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   LANGUAGE            TEXT        - Language code
+--   LANGUAGE_ID         TEXT        - Language identifier
+--   IS_MIGRATED         BOOLEAN     - Whether migrated from legacy system
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_TERRITORY_MASTER                                               │
+│ Rows: 59 | Purpose: Territories within states (operational sub-regions)     │
+│ Used for: Dividing states into manageable operational territories.           │
+│ Relationships: References TBLFK_STATE_MASTER via STATE_ID                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   TERRITORY_ID        TEXT        - Unique territory identifier (logical PK)
+--   STATE_ID            TEXT        - FK to TBLFK_STATE_MASTER
+--   TERRITORY_NAME      TEXT        - Territory name
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_DISTRICT_MASTER                                                │
+│ Rows: 512 | Purpose: Districts (administrative divisions)                   │
+│ Used for: Geographic grouping at district level for reporting/operations.    │
+│ Relationships:                                                               │
+│   - References TBLFK_STATE_MASTER via STATE_ID                              │
+│   - Parent of TBLFK_TALUKA_MASTER via DISTRICT_ID                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   DISTRICT_ID         TEXT        - Unique district identifier (logical PK)
+--   DISTRICT_NAME       TEXT        - District name
+--   STATE_ID            TEXT        - FK to TBLFK_STATE_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_TALUKA_MASTER                                                  │
+│ Rows: 2,155 | Purpose: Talukas (sub-districts / tehsils)                    │
+│ Used for: Granular geographic grouping. Parent of villages.                  │
+│ Relationships:                                                               │
+│   - References TBLFK_DISTRICT_MASTER via DISTRICT_ID                        │
+│   - Parent of TBLFK_VILLAGE_MASTER via TALUKA_ID                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   TALUKA_ID           TEXT        - Unique taluka identifier (logical PK)
+--   TALUKA_NAME         TEXT        - Taluka name
+--   DISTRICT_ID         TEXT        - FK to TBLFK_DISTRICT_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_VILLAGE_MASTER                                                 │
+│ Rows: 219,894 | Purpose: Villages (lowest geographic unit)                  │
+│ Used for: Farmer location assignment. Most granular geographic entity.      │
+│ Relationships: References TBLFK_TALUKA_MASTER via TALUKA_ID                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   VILLAGE_ID          TEXT        - Unique village identifier (logical PK)
+--   TALUKA_ID           TEXT        - FK to TBLFK_TALUKA_MASTER
+--   VILLAGE_NAME        TEXT        - Village name
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 2: PROJECT & SEASON MANAGEMENT                                  ║
+-- ║  Hierarchy: Project → Project Year → Season Mapping                      ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_PROJECT_MASTER                                                 │
+│ Rows: 5 | Purpose: Carbon credit projects                                  │
+│ Used for: Top-level project definitions for carbon credit programs.         │
+│ Relationships: Parent of TBLFK_PROJECT_YEAR_MASTER                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   PROJECT_ID          TEXT        - Unique project identifier (logical PK)
+--   PROJECT_NAME        TEXT        - Project name
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   PROJECT_START_DATE  TIMESTAMP_NTZ - When the project started
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_PROJECT_YEAR_MASTER                                            │
+│ Rows: 10 | Purpose: Project year periods                                   │
+│ Used for: Defining yearly cycles within a project with start/end dates.     │
+│ Relationships:                                                               │
+│   - References TBLFK_PROJECT_MASTER via PROJECT_ID                          │
+│   - Parent of TBLFK_PROJECT_YEAR_SEASON_MAPPING                             │
+│   - Referenced by most transactional tables via PROJECT_YEAR_ID             │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   PROJECT_ID          TEXT        - FK to TBLFK_PROJECT_MASTER
+--   MR_GROUP_ID         TEXT        - Monitoring & Reporting group
+--   TYPE                TEXT        - Year type classification
+--   START_DATE          TIMESTAMP_NTZ - Year period start
+--   END_DATE            TIMESTAMP_NTZ - Year period end
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   DISPLAY_NAME        TEXT        - User-friendly name
+--   IS_DISPLAY_ACTIVE   BOOLEAN     - Whether visible in UI
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CROP_SEASON_MASTER                                             │
+│ Rows: 4 | Purpose: Agricultural seasons (Kharif, Rabi, Zaid, etc.)         │
+│ Used for: Defining crop growing seasons.                                    │
+│ Relationships: Referenced by season mapping tables                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique season identifier (logical PK)
+--   SEASON_NAME         TEXT        - Season name (e.g., Kharif, Rabi)
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_PROJECT_YEAR_SEASON_MAPPING                                    │
+│ Rows: 70 | Purpose: Maps project years to crop seasons with dates           │
+│ Used for: Defining when each season starts/ends within a project year.      │
+│ Relationships:                                                               │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+│   - References TBLFK_CROP_SEASON_MASTER via SEASON_ID                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   SEASON_ID           TEXT        - FK to TBLFK_CROP_SEASON_MASTER
+--   YEAR                NUMBER      - Calendar year
+--   SEASON_START_DATE   TIMESTAMP_NTZ - Season start
+--   SEASON_END_DATE     TIMESTAMP_NTZ - Season end
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 3: CROP MANAGEMENT                                              ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CROP_MASTER                                                    │
+│ Rows: 114 | Purpose: Master list of crops                                   │
+│ Used for: Reference data for all crops grown in the program.                │
+│ Relationships: Referenced by census and survey tables via CROP_ID            │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   CROP_ID             TEXT        - Unique crop identifier (logical PK)
+--   CROP_NAME           TEXT        - Crop name
+--   SPECIES_ID          TEXT        - FK to TBLFK_SPECIES_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_SPECIES_MASTER                                                 │
+│ Rows: 15 | Purpose: Crop species classification                            │
+│ Used for: Grouping crops by species (e.g., cereals, pulses, oilseeds).     │
+│ Relationships: Parent of TBLFK_CROP_MASTER via SPECIES_ID                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   SPECIES_ID          TEXT        - Unique species identifier (logical PK)
+--   SPECIES_NAME        TEXT        - Species name
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CROP_VARIETY_MASTER                                            │
+│ Rows: 93 | Purpose: Crop varieties (sub-types within a crop)               │
+│ Used for: Tracking specific varieties planted by farmers.                   │
+│ Relationships: References TBLFK_CROP_MASTER via CROP_ID                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   VARIETY_NAME        TEXT        - Variety name
+--   CROP_ID             TEXT        - FK to TBLFK_CROP_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CROP_PROJECT_MASTER                                            │
+│ Rows: 351 | Purpose: Maps crops to projects                                │
+│ Used for: Defining which crops are eligible under which project.            │
+│ Relationships:                                                               │
+│   - References TBLFK_CROP_MASTER via CROP_ID                                │
+│   - References TBLFK_PROJECT_MASTER via PROJECT_ID                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   CROP_ID             TEXT        - FK to TBLFK_CROP_MASTER
+--   PROJECT_ID          TEXT        - FK to TBLFK_PROJECT_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   IS_ACTIVE           BOOLEAN
+--   CROP_IMAGE          TEXT        - URL/path to crop image
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CROP_PROJECT_SEASON_MAPPING                                    │
+│ Rows: 254 | Purpose: Maps crops to project seasons                          │
+│ Used for: Defining which crops can be grown in which season for a project.  │
+│ Relationships:                                                               │
+│   - References TBLFK_CROP_PROJECT_MASTER                                    │
+│   - References TBLFK_CROP_SEASON_MASTER                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   CROP_PROJECT_ID     TEXT        - FK to TBLFK_CROP_PROJECT_MASTER
+--   SEASON_ID           TEXT        - FK to TBLFK_CROP_SEASON_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 4: FARMER & USER MANAGEMENT                                     ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_FARMER_DETAIL                                                  │
+│ Rows: 243,119 | Purpose: Core farmer registration details                  │
+│ Used for: Central farmer entity. All farmer-related data references this.   │
+│ Relationships:                                                               │
+│   - Referenced by virtually all transactional tables via FARMER_ID           │
+│   - References geographic hierarchy via VILLAGE_ID, STATE_ID, etc.          │
+│   - Parent of TBLFK_FARMER_BANK_DETAIL, TBLFK_FARMER_AADHAAR_DETAIL       │
+│   - Parent of TBLFK_FARMER_AGREEMENT, TBLFK_FIELD_DETAIL                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   FARMER_ID           TEXT        - Unique farmer identifier (logical PK)
+--   FARMER_NAME         TEXT        - Farmer's full name
+--   MOBILE_NO           TEXT        - Primary phone number
+--   VILLAGE_ID          TEXT        - FK to TBLFK_VILLAGE_MASTER
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT        - Field agent who registered the farmer
+--   UPDATED_BY          TEXT
+--   UNIQUE_ID           TEXT        - System-generated unique code
+--   CATEGORY            TEXT        - Farmer category classification
+--   GENDER              TEXT        - Gender
+--   FATHER_HUSBAND_NAME TEXT        - Father/husband name
+--   STATE_ID            TEXT        - FK to TBLFK_STATE_MASTER
+--   DOB                 TIMESTAMP_NTZ - Date of birth
+--   PROFILE_PIC         TEXT        - Profile picture URL
+--   ALT_MOBILE          TEXT        - Alternate phone number
+--   TOTAL_AREA          TEXT        - Total farming area
+--   TOTAL_FIELD         TEXT        - Total number of fields
+--   LEAD_FARMER_ID      TEXT        - FK to lead/referring farmer
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_FARMER_BANK_DETAIL                                             │
+│ Rows: 111,883 | Purpose: Farmer bank account information                   │
+│ Used for: Payment processing for carbon credit disbursements.               │
+│ Relationships: References TBLFK_FARMER_DETAIL via FARMER_ID                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   BANK_NAME           TEXT        - Name of the bank
+--   ACCOUNT_NO          TEXT        - Bank account number
+--   IFSC_CODE           TEXT        - IFSC code for bank branch
+--   ACCOUNT_HOLDER_NAME TEXT        - Name on the account
+--   PASSBOOK_IMAGE      TEXT        - Passbook scan URL
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   BRANCH_NAME         TEXT        - Bank branch name
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_FARMER_AADHAAR_DETAIL                                          │
+│ Rows: 114,075 | Purpose: Farmer Aadhaar (national ID) details              │
+│ Used for: Identity verification and KYC compliance.                         │
+│ Relationships: References TBLFK_FARMER_DETAIL via FARMER_ID                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   AADHAAR_NO          TEXT        - Aadhaar number (masked/encrypted)
+--   AADHAAR_NAME        TEXT        - Name as on Aadhaar
+--   AADHAAR_IMAGE_FRONT TEXT        - Front image URL
+--   AADHAAR_IMAGE_BACK  TEXT        - Back image URL
+--   IS_VERIFIED         BOOLEAN     - Verification status
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_AADHAR_OCR_AUDIT_HISTORY                                       │
+│ Rows: 6,929 | Purpose: Aadhaar OCR verification audit trail                │
+│ Used for: Tracking OCR-based Aadhaar verification attempts and results.    │
+│ Relationships: References TBLFK_FARMER_DETAIL via FARMER_ID                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  NUMBER      - Auto-increment identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   OCR_NAME            TEXT        - Name extracted by OCR
+--   OCR_AADHAAR_NO      TEXT        - Aadhaar number extracted by OCR
+--   MATCH_STATUS        TEXT        - Whether OCR matched provided data
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_EKYC_ENABLED_FARMERS                                           │
+│ Rows: 193,841 | Purpose: Farmers enabled for eKYC verification             │
+│ Used for: Tracking which farmers have completed electronic KYC.             │
+│ Relationships: References TBLFK_FARMER_DETAIL via FARMER_ID                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  NUMBER      - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   IS_EKYC_ENABLED     BOOLEAN     - Whether eKYC is enabled
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_FARMER_AGREEMENT                                               │
+│ Rows: 109,804 | Purpose: Farmer participation agreements/contracts          │
+│ Used for: Legal agreements between farmers and the carbon credit program.   │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   AGREEMENT_URL       TEXT        - URL to signed agreement document
+--   AGREEMENT_STATUS    TEXT        - Status (pending/signed/expired)
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   ACTIVITY_ID         TEXT        - FK to TBLFK_ACTIVITY
+--   AGREEMENT_TYPE      TEXT        - Type of agreement
+--   IS_MIGRATED         BOOLEAN
+--   LANGUAGE            TEXT        - Language of the agreement
+--   SIGNED_AGREEMENT_URL TEXT       - URL of fully signed version
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_USER_MASTER_EX                                                 │
+│ Rows: 1,578 | Purpose: System users (field agents, managers, admins)       │
+│ Used for: User authentication, role-based access, agent tracking.           │
+│ Relationships:                                                               │
+│   - References TBLFK_ROLE_MASTER via ROLE_ID                                │
+│   - References TBLFK_PARTNER_MASTER via PARTNER_ID                          │
+│   - Referenced by CREATED_BY/UPDATED_BY in most tables                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   USER_ID             TEXT        - Unique user identifier (logical PK)
+--   USERNAME            TEXT        - Login username
+--   MOBILE              TEXT        - Mobile number
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   ROLE_ID             TEXT        - FK to TBLFK_ROLE_MASTER
+--   ACCESS_CONTROL      NUMBER      - Access level
+--   PARTNER_ID          TEXT        - FK to TBLFK_PARTNER_MASTER
+--   ALT_NUMBER          TEXT        - Alternate phone
+--   JOINING_DATE        TIMESTAMP_NTZ
+--   EXIT_DATE           TIMESTAMP_NTZ
+--   PRIVATE_KEY         TEXT        - Auth key (encrypted)
+--   IS_TEST_USER        BOOLEAN     - Test user flag
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_ROLE_MASTER                                                    │
+│ Rows: 5 | Purpose: User role definitions                                   │
+│ Used for: RBAC - defines roles like Admin, Field Agent, Manager, etc.      │
+│ Relationships: Referenced by TBLFK_USER_MASTER_EX via ROLE_ID               │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ROLE_ID             TEXT        - Unique role identifier (logical PK)
+--   ROLE_NAME           TEXT        - Role name
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_PARTNER_MASTER                                                 │
+│ Rows: 7 | Purpose: Partner organizations                                   │
+│ Used for: Tracking implementing partner organizations.                      │
+│ Relationships: Referenced by TBLFK_USER_MASTER_EX via PARTNER_ID            │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   PARTNER_ID          TEXT        - Unique partner identifier (logical PK)
+--   PARTNER_NAME        TEXT        - Partner organization name
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 5: FIELD & POLYGON MANAGEMENT                                   ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_FIELD_DETAIL                                                   │
+│ Rows: 478,438 | Purpose: Farmer field/plot details                         │
+│ Used for: Core field entity - each farmer's individual agricultural plots.  │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - Referenced by census, survey, polygon, practice tables via FIELD_ID     │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   FIELD_ID            TEXT        - Unique field identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_NO            NUMBER      - Sequential field number for the farmer
+--   AREA                TEXT        - Field area (acres)
+--   VILLAGE_ID          TEXT        - FK to TBLFK_VILLAGE_MASTER
+--   COORDINATES         TEXT        - GPS coordinates / polygon data
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   KHASRA_NO           TEXT        - Land revenue record number
+--   OWNERSHIP_TYPE      TEXT        - Owned/leased/shared
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_POLYGON_CHILD_MAP                                              │
+│ Rows: 51,193 | Purpose: Sub-polygons within a field boundary               │
+│ Used for: Breaking complex field boundaries into child polygons for QC.     │
+│ Relationships:                                                               │
+│   - References TBLFK_FIELD_DETAIL via PARENT_ID (field's polygon)           │
+│   - Related to TBLFK_POLYGON_QC_AUDIT for quality checks                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   PARENT_ID           TEXT        - FK to parent polygon/field
+--   COORDINATES         TEXT        - GeoJSON polygon coordinates
+--   AREA_IN_ACRES       NUMBER      - Calculated area
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   ACRES_CREATED_AT    TIMESTAMP_NTZ - When area was calculated
+--   ACRES_UPDATED_AT    TIMESTAMP_NTZ - When area was recalculated
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_POLYGON_QC_AUDIT                                               │
+│ Rows: 1,982,297 | Purpose: Quality control audit for field polygons        │
+│ Used for: Recording QC checks on mapped field polygons (approval/rejection).│
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  NUMBER      - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   UNIQUE_ID           TEXT        - External unique reference
+--   COORDINATES         TEXT        - Polygon coordinates being audited
+--   AREA                TEXT        - Area of polygon
+--   FIELD_NO            NUMBER      - Field number
+--   POLYGON_STATUS      TEXT        - Status of polygon (valid/invalid)
+--   POLYGON_REMARK      TEXT        - QC remarks
+--   QC_STATUS           TEXT        - QC decision (approved/rejected/pending)
+--   USER_TYPE           TEXT        - Type of QC user
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_LAND_RECORDS                                                   │
+│ Rows: 38,016 | Purpose: Government land ownership records                  │
+│ Used for: Verifying farmer land ownership via official records.             │
+│ Relationships: References TBLFK_FARMER_DETAIL via FARMER_ID                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   RECORD_TYPE         TEXT        - Type of land record
+--   DOCUMENT_URL        TEXT        - URL to scanned document
+--   KHASRA_NO           TEXT        - Land parcel number
+--   AREA                TEXT        - Area as per record
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 6: CENSUS & SURVEY DATA                                         ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CENSUS                                                         │
+│ Rows: 3,736,693 | Purpose: Crop census data (what's planted where)         │
+│ Used for: Recording crop details per field per season. Central to reporting.│
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+│   - References TBLFK_CROP_MASTER via CROP_ID                                │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+│   - Referenced by TBLFK_SAMPLE_SURVEY via CENSUS_ID                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique census entry identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   CROP_ID             TEXT        - FK to TBLFK_CROP_MASTER
+--   CROP_VARIETY_ID     TEXT        - FK to TBLFK_CROP_VARIETY_MASTER
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   SEASON_ID           TEXT        - FK to TBLFK_CROP_SEASON_MASTER
+--   AREA                TEXT        - Area under this crop
+--   FIELD_NO            NUMBER      - Field number
+--   STATUS              TEXT        - Census status
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   ACTIVITY_ID         TEXT        - FK to TBLFK_ACTIVITY
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CENSUS_COMMENT                                                 │
+│ Rows: 25,343 | Purpose: Comments/notes on census entries                   │
+│ Used for: Adding QC or review comments to census records.                   │
+│ Relationships:                                                               │
+│   - References TBLFK_CENSUS via CENSUS_ID                                   │
+│   - References TBLFK_CENSUS_COMMENT_MASTER via COMMENT_ID                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   CENSUS_ID           TEXT        - FK to TBLFK_CENSUS
+--   COMMENT_ID          TEXT        - FK to TBLFK_CENSUS_COMMENT_MASTER
+--   COMMENT_TEXT        TEXT        - Free-text comment
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CENSUS_COMMENT_MASTER                                          │
+│ Rows: 7 | Purpose: Predefined comment types for census                     │
+│ Used for: Standardizing comment categories on census entries.               │
+│ Relationships: Referenced by TBLFK_CENSUS_COMMENT via COMMENT_ID            │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   COMMENT_NAME        TEXT        - Comment category name
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_CENSUS_VALIDATION                                              │
+│ Rows: 64 | Purpose: Census validation rules                                │
+│ Used for: Defining validation criteria for census data quality checks.      │
+│ Relationships: Applied to TBLFK_CENSUS entries during validation            │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   VALIDATION_NAME     TEXT        - Name of validation rule
+--   VALIDATION_TYPE     TEXT        - Type of validation
+--   VALIDATION_VALUE    TEXT        - Threshold or expected value
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBL_SHORT_SURVEY                                                     │
+│ Rows: 4,186,276 | Purpose: Short-form survey responses                     │
+│ Used for: Quick field surveys with ~20 questions (Q0050-Q0072).             │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+│   - Related to TBLFK_MOVED_SURVEY_TO_CENSUS via SHORT_SURVEY_ID             │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  NUMBER      - Unique identifier (logical PK)
+--   FIELD_NO            NUMBER      - Field number
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   YEAR                NUMBER      - Survey year
+--   CROP_NAME           TEXT        - Crop being surveyed
+--   Q0050 - QS072       TEXT        - Survey question responses (23 columns)
+--   ADDED_BY            NUMBER      - User who added
+--   ADDED_DTM           TIMESTAMP_NTZ - When added
+--   UPDATED_DTM         TIMESTAMP_NTZ - When updated
+--   LOCATION            TEXT        - GPS location at survey time
+--   UPDATEDLOCATION     TEXT        - Updated GPS location
+--   ACTIVITYSTART_TIMESTAMP TIMESTAMP_NTZ - When activity started
+--   IS_MIGRATED         BOOLEAN
+--   IS_ACTIVE           BOOLEAN
+--   FARMER_ID           NUMBER      - FK to farmer
+--   UPDATED_BY          NUMBER
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBL_LONG_SURVEY                                                      │
+│ Rows: 6,326 | Purpose: Long-form detailed survey responses                 │
+│ Used for: Comprehensive surveys with ~63 questions (Q0070-Q0132).           │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  NUMBER      - Unique identifier (logical PK)
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   FIELD_NO            NUMBER      - Field number
+--   YEAR                NUMBER      - Survey year
+--   CROP_NAME           TEXT        - Crop being surveyed
+--   Q0070 - Q0132       TEXT        - Survey question responses (63 columns)
+--   ADDED_BY            NUMBER      - User who added
+--   ADDED_DTM           TIMESTAMP_NTZ - When added
+--   UPDATED_DTM         TIMESTAMP_NTZ - When updated
+--   LOCATION            TEXT        - GPS location at survey time
+--   UPDATEDLOCATION     TEXT        - Updated GPS location
+--   ACTIVITYSTART_TIMESTAMP TIMESTAMP_NTZ
+--   IS_MIGRATED         BOOLEAN
+--   IS_ACTIVE           BOOLEAN
+--   FARMER_ID           NUMBER      - FK to farmer
+--   UPDATED_BY          NUMBER
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_SAMPLE_SURVEY                                                  │
+│ Rows: 17,821 | Purpose: Sample-based surveys linked to census              │
+│ Used for: Targeted surveys on sampled census entries for verification.      │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+│   - References TBLFK_CENSUS via CENSUS_ID                                   │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+│   - References TBLFK_ACTIVITY via ACTIVITY_ID                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   CENSUS_ID           TEXT        - FK to TBLFK_CENSUS
+--   CENSUS_CROP_ID      TEXT        - Crop from the census entry
+--   SURVEY_MASTER_ID    TEXT        - Survey template reference
+--   PRACTICE_IDS        TEXT        - Practices being surveyed (JSON/CSV)
+--   ANSWERS             TEXT        - Survey answers (JSON)
+--   IS_COMPLETED        BOOLEAN     - Whether survey is complete
+--   ACTIVITY_ID         TEXT        - FK to TBLFK_ACTIVITY
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_MOVED_SURVEY_TO_CENSUS                                         │
+│ Rows: 3,151,407 | Purpose: Tracks surveys promoted to census records       │
+│ Used for: Linking short surveys that were validated and moved to census.    │
+│ Relationships: References TBL_SHORT_SURVEY via SHORT_SURVEY_ID              │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   SHORT_SURVEY_ID     NUMBER      - FK to TBL_SHORT_SURVEY.ID
+--   IS_MOVED_TO_CENSUS  BOOLEAN     - Whether moved
+--   CREATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 7: ACTIVITIES & PRACTICES                                       ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_ACTIVITY_MASTER                                                │
+│ Rows: 20 | Purpose: Types of field activities                              │
+│ Used for: Defining activity categories (census, agreement, attestation...). │
+│ Relationships: Referenced by TBLFK_ACTIVITY via ACTIVITY_MASTER_ID          │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ACTIVITY_ID         TEXT        - Unique activity type identifier (logical PK)
+--   ACTIVITY_NAME       TEXT        - Activity name
+--   ACTIVITY_CATEGORY   TEXT        - Category grouping
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_ACTIVITY                                                       │
+│ Rows: 667,288 | Purpose: Field activity log                                │
+│ Used for: Recording every field visit/action by agents. Core operational    │
+│   tracking table linking agents to farmer interactions.                      │
+│ Relationships:                                                               │
+│   - References TBLFK_ACTIVITY_MASTER via ACTIVITY_MASTER_ID                 │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_USER_MASTER_EX via USER_ID                             │
+│   - Referenced by agreement, census, survey tables via ACTIVITY_ID          │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique activity identifier (logical PK)
+--   ACTIVITY_MASTER_ID  TEXT        - FK to TBLFK_ACTIVITY_MASTER
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   USER_ID             TEXT        - FK to TBLFK_USER_MASTER_EX (agent)
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   GEOLOCATION         TEXT        - GPS coordinates of activity
+--   STATUS              TEXT        - Activity status
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_ACTIVITY_QUESTION_MASTER                                       │
+│ Rows: 23 | Purpose: Questions associated with ground truth activities      │
+│ Used for: Defining questions asked during ground-truth field activities.    │
+│ Relationships: Referenced by TBLFK_GT_ACTIVITY_ANSWER                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   QUESTION_TEXT       TEXT        - Question text
+--   QUESTION_TYPE       TEXT        - Question format (MCQ, text, numeric)
+--   OPTIONS             TEXT        - Answer options (JSON)
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_PRACTICE_MASTER                                                │
+│ Rows: 19 | Purpose: Sustainable farming practices                          │
+│ Used for: Defining carbon-reducing agricultural practices being tracked.    │
+│ Relationships:                                                               │
+│   - Referenced by TBLFK_PRACTICE_ADOPTION_DETAIL                            │
+│   - Referenced by TBLFK_PRACTICE_DOS_DETAILS                                │
+│   - Referenced by TBLFK_RS_PRACTICE_VALIDATION                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   PRACTICE_ID         TEXT        - Unique practice identifier (logical PK)
+--   PRACTICE_NAME       TEXT        - Practice name
+--   PRACTICE_TYPE       TEXT        - Type classification
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   PRACTICE_CROP       TEXT        - Applicable crop
+--   IS_ACTIVE           BOOLEAN
+--   APPLICABLE_TYPE     TEXT        - When applicable
+--   LINKED_PRACTICE_ID  TEXT        - Related practice
+--   IS_EARLIEST_DOS_REQUIRED BOOLEAN - Whether earliest date of sowing needed
+--   IS_EARLIEST_DOH_REQUIRED BOOLEAN - Whether earliest date of harvest needed
+--   IS_RICE_PLANTATION_VISIBLE BOOLEAN - Rice-specific flag
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_PRACTICE_ADOPTION_DETAIL                                       │
+│ Rows: 140,377 | Purpose: Records farmer practice adoption                  │
+│ Used for: Tracking which sustainable practices farmers have adopted.        │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+│   - References TBLFK_ACTIVITY via ACTIVITY_ID                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   PRACTICE_ADOPTION_DETAILS TEXT  - JSON with practice adoption data
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   GEOLOCATION         TEXT        - GPS at time of recording
+--   ACTIVITY_ID         TEXT        - FK to TBLFK_ACTIVITY
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_PRACTICE_DOS_DETAILS                                           │
+│ Rows: 97,343 | Purpose: Date of Sowing details per practice                │
+│ Used for: Recording sowing dates for practices on specific fields/crops.    │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+│   - References TBLFK_CROP_MASTER via CROP_ID                                │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   DOS                 TEXT        - Date of Sowing
+--   CROP_ID             TEXT        - FK to TBLFK_CROP_MASTER
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   PROJECT_SEASON_MAPPING_ID TEXT  - FK to season mapping
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_RS_PRACTICE_VALIDATION                                         │
+│ Rows: 1,195,632 | Purpose: Remote sensing practice validation              │
+│ Used for: Validating farmer-reported practices using satellite/RS data.     │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   FIELD_NO            NUMBER      - Field number
+--   CROP_NAME           TEXT        - Crop name
+--   PRACTICE_YEAR       TEXT        - Year of practice
+--   PRACTICE            TEXT        - Practice name/code
+--   SUBMITTED_TO_REGISTRY TEXT      - Whether submitted to carbon registry
+--   ADDED_BY            TEXT
+--   UPDATED_BY          TEXT
+--   ADDED_DTM           TIMESTAMP_NTZ
+--   UPDATED_DTM         TIMESTAMP_NTZ
+--   RS_MODEL            TEXT        - Remote sensing model used
+--   PREDICTED_DOS       TEXT        - Model-predicted date of sowing
+--   PREDICTED_PRACTICE  TEXT        - Model-predicted practice
+--   PRACTICE_MATCH      TEXT        - Whether prediction matches reported
+--   PREDICTED_CROP      TEXT        - Model-predicted crop
+--   CROP_MATCH          TEXT        - Whether crop prediction matches
+--   IS_ACTIVE           BOOLEAN
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 8: GROUND TRUTH & ATTESTATION                                   ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_GT_LIST                                                        │
+│ Rows: 84 | Purpose: Ground truth verification task list                    │
+│ Used for: Assigning ground truth verification tasks to field agents.        │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+│   - Parent of TBLFK_GT_ACTIVITY_ANSWER                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   STATUS              TEXT        - GT task status
+--   ASSIGNED_TO         TEXT        - Agent assigned
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_GT_ACTIVITY_ANSWER                                             │
+│ Rows: 104 | Purpose: Ground truth activity answers                         │
+│ Used for: Recording answers collected during ground truth field visits.     │
+│ Relationships:                                                               │
+│   - References TBLFK_GT_LIST via GT_ID                                      │
+│   - References TBLFK_ACTIVITY_QUESTION_MASTER via QUESTION_ID               │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   GT_ID               TEXT        - FK to TBLFK_GT_LIST
+--   QUESTION_ID         TEXT        - FK to TBLFK_ACTIVITY_QUESTION_MASTER
+--   ANSWER              TEXT        - Answer value
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_ATTESTATION                                                    │
+│ Rows: 94,905 | Purpose: Farmer attestation/declaration records             │
+│ Used for: Formal attestations by farmers confirming practice adoption.      │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+│   - References TBLFK_ACTIVITY via ACTIVITY_ID                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   ATTESTATION_URL     TEXT        - URL to attestation document
+--   STATUS              TEXT        - Attestation status
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   ACTIVITY_ID         TEXT        - FK to TBLFK_ACTIVITY
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_SELF_AFFIDAVIT                                                 │
+│ Rows: 0 | Purpose: Self-declaration affidavits by farmers                  │
+│ Used for: Legal self-declarations (currently empty - feature not yet used). │
+│ Relationships: References TBLFK_FARMER_DETAIL via FARMER_ID                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  NUMBER      - Unique identifier (logical PK)
+--   DOCUMENT_ID         TEXT        - Document reference
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   AFFIDAVIT_URL       TEXT        - URL to affidavit
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   ACTIVITY_ID         TEXT        - FK to TBLFK_ACTIVITY
+--   IS_AFFIDAVIT_ELIGIBLE BOOLEAN   - Eligibility flag
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 9: STATUS MANAGEMENT & FARMER LIFECYCLE                         ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_STATUS_MAPPING_GROUP_MASTER                                    │
+│ Rows: 3 | Purpose: Top-level status groups                                 │
+│ Used for: Defining broad status categories (e.g., Active, Inactive, Hold). │
+│ Relationships: Parent of TBLFK_STATUS_MAPPING_MASTER via GROUP_ID           │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   GROUP_NAME          TEXT        - Group name
+--   SEQUENCE            NUMBER      - Display order
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   GROUP_CATEGORY      TEXT        - Category classification
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_STATUS_MAPPING_MASTER                                          │
+│ Rows: 4 | Purpose: Status sub-groups within a group                        │
+│ Used for: Defining sub-categories of status (e.g., Dropout types).         │
+│ Relationships:                                                               │
+│   - References TBLFK_STATUS_MAPPING_GROUP_MASTER via GROUP_ID               │
+│   - Parent of TBLFK_STATUS_MAPPING_REASON_MASTER via SUB_GROUP_ID           │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   GROUP_ID            TEXT        - FK to TBLFK_STATUS_MAPPING_GROUP_MASTER
+--   SUB_GROUP_NAME      TEXT        - Sub-group name
+--   SEQUENCE            NUMBER      - Display order
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   OPTIONS             TEXT        - Additional options (JSON)
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_STATUS_MAPPING_REASON_MASTER                                   │
+│ Rows: 30 | Purpose: Reasons for status changes                             │
+│ Used for: Defining specific reasons (e.g., "farmer moved", "land sold").   │
+│ Relationships: References TBLFK_STATUS_MAPPING_MASTER via SUB_GROUP_ID      │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   REASON              TEXT        - Reason text
+--   SUB_GROUP_ID        TEXT        - FK to TBLFK_STATUS_MAPPING_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_STATUS_MAPPING                                                 │
+│ Rows: 28,592 | Purpose: Farmer status change history                       │
+│ Used for: Recording status transitions for farmers across project years.    │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_STATUS_MAPPING_REASON_MASTER via REASON_ID             │
+│   - References TBLFK_STATUS_MAPPING_MASTER via SUB_GROUP_ID                 │
+│   - References TBLFK_PROJECT_YEAR_MASTER via PROJECT_YEAR_ID                │
+│   - References TBLFK_ACTIVITY via ACTIVITY_ID                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   REASON_ID           TEXT        - FK to TBLFK_STATUS_MAPPING_REASON_MASTER
+--   SUB_GROUP_ID        TEXT        - FK to TBLFK_STATUS_MAPPING_MASTER
+--   PROJECT_YEAR_ID     TEXT        - FK to TBLFK_PROJECT_YEAR_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   ACTIVITY_ID         TEXT        - FK to TBLFK_ACTIVITY
+--   IS_MIGRATED         BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 10: CONFIGURATION & UTILITIES                                   ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_GLOBAL_CONFIGURATION                                           │
+│ Rows: 45 | Purpose: System configuration key-value store                   │
+│ Used for: Application-wide settings and feature flags.                      │
+│ Relationships: None (standalone configuration table)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   CONFIG_KEY          TEXT        - Configuration key
+--   CONFIG_VALUE        TEXT        - Configuration value
+--   CONFIG_TYPE         TEXT        - Data type of value
+--   DESCRIPTION         TEXT        - Human-readable description
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_FILTER_MASTER                                                  │
+│ Rows: 3 | Purpose: Farmer filter categories                                │
+│ Used for: Defining filter types for farmer segmentation in the app UI.     │
+│ Relationships: Parent of TBLFK_SUB_FILTER_MASTER                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FILTER_NAME         TEXT        - Filter name
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_SUB_FILTER_MASTER                                              │
+│ Rows: 13 | Purpose: Sub-filter options within a filter category            │
+│ Used for: Granular filter options for farmer lists in the application.      │
+│ Relationships: References TBLFK_FILTER_MASTER via FARMER_FILTER_ID          │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   SUB_FILTER_NAME     TEXT        - Sub-filter name
+--   FARMER_FILTER_ID    TEXT        - FK to TBLFK_FILTER_MASTER
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_ALLOTMENT_MASTER                                               │
+│ Rows: 18,553 | Purpose: User-to-village allotment assignments              │
+│ Used for: Assigning field agents to specific villages for operations.       │
+│ Relationships:                                                               │
+│   - References TBLFK_USER_MASTER_EX via USER_ID                             │
+│   - References TBLFK_VILLAGE_MASTER via VILLAGE_ID                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   USER_ID             TEXT        - FK to TBLFK_USER_MASTER_EX
+--   VILLAGE_ID          TEXT        - FK to TBLFK_VILLAGE_MASTER
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_LEAD_MAPPING                                                   │
+│ Rows: 1,355 | Purpose: Lead farmer to regular farmer mapping               │
+│ Used for: Tracking which lead farmers have referred/mentored others.        │
+│ Relationships: References TBLFK_FARMER_DETAIL via FARMER_ID, LEAD_FARMER_ID │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL (regular farmer)
+--   LEAD_FARMER_ID      TEXT        - FK to TBLFK_FARMER_DETAIL (lead farmer)
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_MOBILE_VERIFICATION_TYPE_MASTER                                │
+│ Rows: 7 | Purpose: Mobile verification methods                             │
+│ Used for: Defining types of mobile OTP/verification methods available.      │
+│ Relationships: Standalone reference table                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  NUMBER      - Unique identifier (logical PK)
+--   DISPLAY_NAME        TEXT        - User-facing method name
+--   TIMEOUT_IN_SECONDS  NUMBER      - OTP timeout period
+--   DESCRIPTION         TEXT        - Method description
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_LS_QUESTION_MASTER                                             │
+│ Rows: 16 | Purpose: Long survey question definitions                       │
+│ Used for: Defining questions used in long-form surveys.                     │
+│ Relationships: Referenced by TBL_LONG_SURVEY response columns               │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   QUESTION_TEXT       TEXT        - Question text
+--   QUESTION_TYPE       TEXT        - Type (MCQ, text, numeric)
+--   OPTIONS             TEXT        - Answer options
+--   SEQUENCE            NUMBER      - Display order
+--   IS_ACTIVE           BOOLEAN
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_LS_VALIDATION_MASTER                                           │
+│ Rows: 0 | Purpose: Long survey validation rules                            │
+│ Used for: Defining validation rules for long surveys (not yet populated).   │
+│ Relationships: Applied to TBL_LONG_SURVEY responses                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   ID                  TEXT        - Unique identifier (logical PK)
+--   VALIDATION_NAME     TEXT        - Validation rule name
+--   VALIDATION_TYPE     TEXT        - Type of validation
+--   VALIDATION_VALUE    TEXT        - Expected value/threshold
+--   CREATED_AT          TIMESTAMP_NTZ
+--   UPDATED_AT          TIMESTAMP_NTZ
+--   CREATED_BY          TEXT
+--   UPDATED_BY          TEXT
+--   IS_ACTIVE           BOOLEAN
+--   EDW_INSERTED_TIMESTAMP TIMESTAMP_NTZ
+--   EDW_UPDATED_TIMESTAMP  TIMESTAMP_NTZ
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 11: BACKUP & TEMPORARY TABLES                                   ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: BACKUP_AGREEMENT_12112025                                            │
+│ Rows: 69,051 | Purpose: Backup of TBLFK_FARMER_AGREEMENT as of 12-Nov-2025 │
+│ Used for: Point-in-time backup before a data migration/fix.                 │
+│ Relationships: Same structure as TBLFK_FARMER_AGREEMENT                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: BACKUP_TBLFK_FARMER_AGREEMENT_20112025                               │
+│ Rows: 69,318 | Purpose: Backup of TBLFK_FARMER_AGREEMENT as of 20-Nov-2025 │
+│ Used for: Second point-in-time backup before additional changes.            │
+│ Relationships: Same structure as TBLFK_FARMER_AGREEMENT                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+
+/*
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ TABLE: TBLFK_QC_DATA_04112025                                               │
+│ Rows: 14,997 | Purpose: QC data snapshot as of 04-Nov-2025                 │
+│ Used for: Temporary QC analysis table for polygon/field QC status.          │
+│ Relationships:                                                               │
+│   - References TBLFK_FARMER_DETAIL via FARMER_ID                            │
+│   - References TBLFK_FIELD_DETAIL via FIELD_ID                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+*/
+-- Columns:
+--   FARMER_ID           TEXT        - FK to TBLFK_FARMER_DETAIL
+--   FIELD_ID            TEXT        - FK to TBLFK_FIELD_DETAIL
+--   POLYGON_EXISTS      BOOLEAN     - Whether polygon exists for field
+--   QC_EXISTS           BOOLEAN     - Whether QC has been done
+--   FIELD_NO            NUMBER      - Field number
+
+
+-- ╔════════════════════════════════════════════════════════════════════════════╗
+-- ║  SECTION 12: ENTITY RELATIONSHIP SUMMARY                                 ║
+-- ╚════════════════════════════════════════════════════════════════════════════╝
+
+/*
+KEY RELATIONSHIP PATTERNS:
+══════════════════════════
+
+1. GEOGRAPHIC HIERARCHY (1:N at each level):
+   COUNTRY → ZONE → STATE → TERRITORY
+                  → STATE → DISTRICT → TALUKA → VILLAGE
+
+2. PROJECT HIERARCHY:
+   PROJECT → PROJECT_YEAR → PROJECT_YEAR_SEASON_MAPPING
+   PROJECT → CROP_PROJECT → CROP_PROJECT_SEASON_MAPPING
+
+3. FARMER CORE (Star schema around FARMER_DETAIL):
+   FARMER_DETAIL ←→ FARMER_BANK_DETAIL (1:1)
+   FARMER_DETAIL ←→ FARMER_AADHAAR_DETAIL (1:1)
+   FARMER_DETAIL ←→ FARMER_AGREEMENT (1:N per project year)
+   FARMER_DETAIL ←→ FIELD_DETAIL (1:N)
+   FARMER_DETAIL → VILLAGE_MASTER (N:1)
+   FARMER_DETAIL → STATE_MASTER (N:1)
+
+4. FIELD-LEVEL DATA (linked to FIELD_DETAIL):
+   FIELD_DETAIL ←→ CENSUS (1:N per season)
+   FIELD_DETAIL ←→ POLYGON_QC_AUDIT (1:N)
+   FIELD_DETAIL ←→ POLYGON_CHILD_MAP (1:N)
+   FIELD_DETAIL ←→ PRACTICE_ADOPTION_DETAIL (1:N)
+   FIELD_DETAIL ←→ PRACTICE_DOS_DETAILS (1:N)
+   FIELD_DETAIL ←→ RS_PRACTICE_VALIDATION (1:N)
+   FIELD_DETAIL ←→ TBL_SHORT_SURVEY (1:N)
+   FIELD_DETAIL ←→ TBL_LONG_SURVEY (1:N)
+
+5. ACTIVITY TRACKING:
+   ACTIVITY_MASTER → ACTIVITY (1:N)
+   ACTIVITY → (CENSUS, AGREEMENT, ATTESTATION, etc.) - referenced via ACTIVITY_ID
+
+6. STATUS LIFECYCLE:
+   STATUS_MAPPING_GROUP_MASTER → STATUS_MAPPING_MASTER → STATUS_MAPPING_REASON_MASTER
+   STATUS_MAPPING records farmer status changes with reasons
+
+7. USER/AGENT MANAGEMENT:
+   ROLE_MASTER → USER_MASTER_EX (1:N)
+   PARTNER_MASTER → USER_MASTER_EX (1:N)
+   USER_MASTER_EX → ALLOTMENT_MASTER → VILLAGE_MASTER (assignment)
+
+COMMON COLUMN PATTERNS:
+═══════════════════════
+- IS_ACTIVE (BOOLEAN): Soft delete flag present in ALL tables
+- CREATED_AT/UPDATED_AT: Application-level timestamps
+- CREATED_BY/UPDATED_BY: User who made the change
+- IS_MIGRATED (BOOLEAN): Whether record was migrated from legacy system
+- EDW_INSERTED_TIMESTAMP/EDW_UPDATED_TIMESTAMP: ETL pipeline timestamps
+- All IDs are TEXT type (UUIDs) except some legacy NUMBER IDs in survey tables
+
+REPORTING TIPS:
+═══════════════
+- For farmer counts: Always filter IS_ACTIVE = TRUE
+- For project-year scoping: Join via PROJECT_YEAR_ID
+- For geographic rollups: Join Village → Taluka → District → State → Zone
+- For practice tracking: TBLFK_RS_PRACTICE_VALIDATION has RS model predictions
+- Census is the largest transactional table (3.7M rows) - filter by season
+- TBL_SHORT_SURVEY (4.2M rows) is the highest-volume table
+- POLYGON_QC_AUDIT (2M rows) tracks all QC decisions on field polygons
+*/
