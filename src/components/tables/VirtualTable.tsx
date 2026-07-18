@@ -31,6 +31,7 @@ interface VirtualTableProps<TData> {
   loading?: boolean;
   title?: string;
   enableSearch?: boolean;
+  onRowClick?: (row: TData) => void;
 }
 
 export function VirtualTable<TData>({
@@ -38,7 +39,8 @@ export function VirtualTable<TData>({
   data,
   loading = false,
   title = "Data Grid",
-  enableSearch = true
+  enableSearch = true,
+  onRowClick
 }: VirtualTableProps<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState("");
@@ -322,8 +324,10 @@ export function VirtualTable<TData>({
               return (
                 <tr
                   key={row.id}
+                  onClick={() => onRowClick && onRowClick(row.original)}
                   className={cn(
                     "hover:bg-secondary/40 transition-colors duration-100",
+                    onRowClick ? "cursor-pointer" : "",
                     isOdd ? "bg-secondary/15" : "bg-card"
                   )}
                 >

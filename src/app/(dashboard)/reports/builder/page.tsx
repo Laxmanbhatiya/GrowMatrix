@@ -3,8 +3,10 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useDbStore } from "@/store/dbStore";
+import { usePermissions } from "@/hooks/usePermissions";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Database, 
   Play, 
@@ -29,9 +31,130 @@ import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
 export default function ReportBuilderPage() {
-  const { datasets } = useDbStore();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const datasetIdParam = searchParams.get("datasetId");
+  const reportIdParam = searchParams.get("id");
+
+  const { datasets, saveReport, currentUser, reports, fetchReports, showNotification } = useDbStore();
+  const { hasWriteAccess } = usePermissions();
+  const canSave = hasWriteAccess("report_builder");
+
+  const resultsRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  // Load saved report config from URL query parameter
+  React.useEffect(() => {
+    if (!reportIdParam || reports.length === 0) return;
+    
+    const savedReport = reports.find(r => r.id === reportIdParam);
+    if (!savedReport) return;
+
+    // Populate states from report configuration
+    setSelectedDatasetId(savedReport.query.datasetId);
+    setSelectedFields(savedReport.query.fields || []);
+    setFilters(savedReport.query.filters || { condition: "AND", rules: [] });
+    setGroupFields(savedReport.query.grouping || []);
+    setAggregations(savedReport.query.aggregations || []);
+    
+    if (savedReport.query.sorting && savedReport.query.sorting.length > 0) {
+      setSortField(savedReport.query.sorting[0].field);
+      setSortDir(savedReport.query.sorting[0].direction);
+    } else {
+      setSortField("");
+      setSortDir("desc");
+    }
+
+    setQueryLimit(savedReport.query.limit || null);
+
+    // Presentation mapping
+    const presentation = savedReport.presentation || {};
+    setChartType(presentation.chartOptions?.type || "bar");
+    
+    const display = presentation.displayType === "chart_and_table" ? "split" : (presentation.displayType || "split");
+    setDisplayType(display as any);
+
+    // Automatically execute query on Snowflake
+    const runSavedQuery = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch("http://localhost:3001/api/query", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(savedReport.query)
+        });
+        const res = await response.json();
+        if (res.success && res.data) {
+          setPreviewRecords(res.data);
+          setQueryExecuted(true);
+          setTimeout(() => {
+            resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 150);
+        } else {
+          console.error("Query execution error:", res.error);
+        }
+      } catch (err) {
+        console.error("API call failed:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    runSavedQuery();
+  }, [reportIdParam, reports]);
+
+  // Save report modal states
+  const [isSaveModalOpen, setIsSaveModalOpen] = React.useState(false);
+  const [reportName, setReportName] = React.useState("");
+  const [reportDescription, setReportDescription] = React.useState("");
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const handleSaveReportSubmit = async () => {
+    if (!reportName.trim()) {
+      showNotification("Report Name is required.", "error");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const compiledQuery = compileAQNQuery();
+      const reportId = "rep_" + Math.random().toString(36).substring(2, 11);
+      
+      const newReport = {
+        id: reportId,
+        version: "1.0",
+        metadata: {
+          name: reportName,
+          description: reportDescription,
+          owner: currentUser.name,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          favorite: false,
+          tags: []
+        },
+        query: compiledQuery,
+        presentation: {
+          displayType: (displayType === "split" ? "chart_and_table" : displayType) as any,
+          chartOptions: {
+            type: chartType
+          }
+        }
+      };
+
+      await saveReport(newReport);
+      setIsSaveModalOpen(false);
+      showNotification("Report saved successfully!", "success");
+    } catch (err) {
+      console.error(err);
+      showNotification("Failed to save report.", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const [selectedDatasetId, setSelectedDatasetId] = React.useState("");
   
   // Custom dropdown states
@@ -151,6 +274,7 @@ export default function ReportBuilderPage() {
   
   // Execution & Persistence
   const [isLoading, setIsLoading] = React.useState(false);
+  const [queryExecuted, setQueryExecuted] = React.useState(false);
   
   // Dynamic messages for the premium global loading overlay
   const LOADING_MESSAGES = [
@@ -175,13 +299,14 @@ export default function ReportBuilderPage() {
 
   // Sync default dataset selections when data loads in the store
   React.useEffect(() => {
+    if (reportIdParam) return; // Prevent overwriting saved report values on startup!
     if (!selectedDatasetId && datasets.length > 0) {
       const targetId = datasetIdParam || datasets[0].id;
       const targetDataset = datasets.find(d => d.id === targetId || d.id === targetId.toLowerCase()) || datasets[0];
       setSelectedDatasetId(targetDataset.id);
       setSelectedFields(targetDataset.fields.filter((f: any) => !f.isHidden).slice(0, 4).map((f: any) => f.id));
     }
-  }, [datasets, selectedDatasetId, datasetIdParam]);
+  }, [datasets, selectedDatasetId, datasetIdParam, reportIdParam]);
 
   // Clean trigger when changing active dataset
   const handleDatasetChange = (id: string) => {
@@ -206,6 +331,7 @@ export default function ReportBuilderPage() {
     setQuickEndDate("");
     setQueryLimit(100);
     setPreviewRecords([]);
+    setQueryExecuted(false);
     if (activeDataset) {
       setSelectedFields(
         activeDataset.fields
@@ -243,13 +369,17 @@ export default function ReportBuilderPage() {
       const res = await response.json();
       if (res.success && res.data) {
         setPreviewRecords(res.data);
+        setQueryExecuted(true);
+        setTimeout(() => {
+          resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
       } else {
         console.error("Query execution error:", res.error);
-        alert(`Query execution failed: ${res.error}`);
+        showNotification(`Query execution failed: ${res.error}`, "error");
       }
     } catch (err: any) {
       console.error("API call failed:", err);
-      alert(`Backend API is offline or unreachable: ${err.message}`);
+      showNotification(`Backend API is offline or unreachable: ${err.message}`, "error");
     } finally {
       setIsLoading(false);
     }
@@ -333,8 +463,6 @@ export default function ReportBuilderPage() {
             Build custom reports visually. Compiled queries run against the Snowflake database backend.
           </p>
         </div>
-
-
       </div>
 
       {/* Top Filter Bar */}
@@ -644,7 +772,7 @@ export default function ReportBuilderPage() {
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-2 pr-1">
                   {aggregations.length === 0 && (
                     <div className="text-[11px] text-muted-foreground italic font-sans py-2">
                       No aggregations configured. Output will show raw database records.
@@ -709,84 +837,127 @@ export default function ReportBuilderPage() {
       )}
 
         {/* Bottom Preview Results Panel */}
-        <div className="w-full space-y-6 border-t border-border pt-8 mt-6">
+        {queryExecuted && (
+          <div className="w-full space-y-6 border-t border-border pt-8 mt-6">
 
-          {/* Results Canvas */}
-          <div className="space-y-4">
-            
-            {/* View selectors */}
-            <div className="flex items-center justify-between border-b border-border pb-2 select-none">
-              <div className="flex border border-border rounded-md bg-card overflow-hidden">
-                {(["split", "chart", "table"] as const).map(mode => (
-                  <button
-                    key={mode}
-                    onClick={() => setDisplayType(mode)}
-                    className={cn(
-                      "px-3 py-1.5 font-sans text-xs font-semibold uppercase transition-colors duration-150",
-                      displayType === mode ? "bg-secondary text-primary font-bold" : "text-muted-foreground hover:bg-secondary/40"
-                    )}
-                  >
-                    {mode}
-                  </button>
-                ))}
+            {/* Results Canvas */}
+            <div className="space-y-4">
+              
+              {/* View selectors */}
+              <div className="flex items-center justify-between border-b border-border pb-2 select-none">
+                <div className="flex border border-border rounded-md bg-card overflow-hidden">
+                  {(["split", "chart", "table"] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setDisplayType(mode)}
+                      className={cn(
+                        "px-3 py-1.5 font-sans text-xs font-semibold uppercase transition-colors duration-150 cursor-pointer",
+                        displayType === mode ? "bg-secondary text-primary font-bold" : "text-muted-foreground hover:bg-secondary/40"
+                      )}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Right tools side: Chart type picker + Save Report Button */}
+                <div className="flex items-center gap-3">
+                  {(displayType === "chart" || displayType === "split") && (
+                    <select
+                      value={chartType}
+                      onChange={(e) => setChartType(e.target.value as ChartType)}
+                      className="bg-card border border-border rounded px-2.5 py-1.5 font-sans text-xs text-foreground focus:outline-none cursor-pointer"
+                    >
+                      <option value="bar">Bar Chart</option>
+                      <option value="line">Line Chart</option>
+                      <option value="area">Area Chart</option>
+                      <option value="pie">Pie Chart</option>
+                      <option value="donut">Donut Chart</option>
+                      <option value="treemap">Treemap Chart</option>
+                      <option value="funnel">Funnel Chart</option>
+                      <option value="heatmap">Heatmap Grid</option>
+                      <option value="radar">Radar web</option>
+                      <option value="gauge">Speed Gauge</option>
+                    </select>
+                  )}
+
+                  {canSave && (
+                    <button
+                      onClick={() => {
+                        setReportName("");
+                        setReportDescription("");
+                        setIsSaveModalOpen(true);
+                      }}
+                      disabled={selectedFields.length === 0 || !selectedDatasetId}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-md shadow-primary/10"
+                    >
+                      <span>Save Report</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Chart type picker */}
-              {(displayType === "chart" || displayType === "split") && (
-                <select
-                  value={chartType}
-                  onChange={(e) => setChartType(e.target.value as ChartType)}
-                  className="bg-card border border-border rounded px-2.5 py-1.5 font-sans text-xs text-foreground focus:outline-none"
-                >
-                  <option value="bar">Bar Chart</option>
-                  <option value="line">Line Chart</option>
-                  <option value="area">Area Chart</option>
-                  <option value="pie">Pie Chart</option>
-                  <option value="donut">Donut Chart</option>
-                  <option value="treemap">Treemap Chart</option>
-                  <option value="funnel">Funnel Chart</option>
-                  <option value="heatmap">Heatmap Grid</option>
-                  <option value="radar">Radar web</option>
-                  <option value="gauge">Speed Gauge</option>
-                </select>
-              )}
+              {/* Live Visual mounts */}
+              <div ref={resultsRef} className="scroll-mt-6">
+                {previewRecords.length === 0 ? (
+                  <div className="bg-card border border-border border-dashed rounded-xl p-16 text-center font-sans text-xs text-muted-foreground">
+                    <HelpCircle size={32} className="mx-auto mb-3 text-muted-foreground/60" />
+                    <span>Configure fields, aggregations, and logic rules, then click <strong className="text-foreground">Run Query</strong> to resolve preview results.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* 1. Table Display */}
+                    {(displayType === "table" || displayType === "split") && (
+                      <VirtualTable
+                        title={`${activeDataset?.displayName} Structured Output`}
+                        columns={tableColumns}
+                        data={previewRecords}
+                        loading={isLoading}
+                        onRowClick={(rowData: any) => {
+                          let searchVal = "";
+                          for (const key of Object.keys(rowData)) {
+                            const lowerKey = key.toLowerCase();
+                            if (lowerKey === "farmer_id" || lowerKey === "farmer id" || lowerKey === "farmerid") {
+                              searchVal = String(rowData[key]);
+                              break;
+                            }
+                            if (lowerKey === "mobile" || lowerKey === "mobile_no" || lowerKey === "mobile number") {
+                              searchVal = String(rowData[key]);
+                            }
+                            if (lowerKey === "id" && selectedDatasetId === "TBLFK_FARMER_DETAIL") {
+                              searchVal = String(rowData[key]);
+                              break;
+                            }
+                          }
+                          if (!searchVal && selectedDatasetId === "TBLFK_FARMER_DETAIL") {
+                            searchVal = rowData.FARMER_ID || rowData.MOBILE || rowData.FARMER_NAME || "";
+                          }
+                          if (searchVal) {
+                            router.push(`/reports/farmer-lookup?search=${encodeURIComponent(searchVal)}`);
+                          }
+                        }}
+                      />
+                    )}
+
+                    {/* 2. Chart Display */}
+                    {(displayType === "chart" || displayType === "split") && (
+                      <BaseChart
+                        type={chartType}
+                        data={previewRecords}
+                        xAxisKey={chartKeys.xAxisKey}
+                        valueKeys={chartKeys.valueKeys.length > 0 ? chartKeys.valueKeys : undefined}
+                        title={`${activeDataset?.displayName} Visual Chart`}
+                        loading={isLoading}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+
             </div>
 
-            {/* Live Visual mounts */}
-            {previewRecords.length === 0 ? (
-              <div className="bg-card border border-border border-dashed rounded-xl p-16 text-center font-sans text-xs text-muted-foreground">
-                <HelpCircle size={32} className="mx-auto mb-3 text-muted-foreground/60" />
-                <span>Configure fields, aggregations, and logic rules, then click <strong className="text-foreground">Run Query</strong> to resolve preview results.</span>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* 1. Table Display */}
-                {(displayType === "table" || displayType === "split") && (
-                  <VirtualTable
-                    title={`${activeDataset?.displayName} Structured Output`}
-                    columns={tableColumns}
-                    data={previewRecords}
-                    loading={isLoading}
-                  />
-                )}
-
-                {/* 2. Chart Display */}
-                {(displayType === "chart" || displayType === "split") && (
-                  <BaseChart
-                    type={chartType}
-                    data={previewRecords}
-                    xAxisKey={chartKeys.xAxisKey}
-                    valueKeys={chartKeys.valueKeys.length > 0 ? chartKeys.valueKeys : undefined}
-                    title={`${activeDataset?.displayName} Visual Chart`}
-                    loading={isLoading}
-                  />
-                )}
-              </div>
-            )}
-
           </div>
-
-        </div>
+        )}
 
         {/* Premium Glassmorphic Global Loading Overlay */}
       {isLoading && (
@@ -816,6 +987,79 @@ export default function ReportBuilderPage() {
           </div>
         </div>
       )}
+      {/* Save Report Modal Overlay */}
+      <AnimatePresence>
+        {isSaveModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-card border border-border rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 text-foreground font-sans relative"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <h3 className="font-bold text-sm flex items-center gap-2 text-foreground">
+                  <BarChart size={16} className="text-primary" />
+                  <span>Save Query Report</span>
+                </h3>
+                <button
+                  onClick={() => setIsSaveModalOpen(false)}
+                  className="text-muted-foreground hover:text-foreground cursor-pointer text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                    Report Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reportName}
+                    onChange={(e) => setReportName(e.target.value)}
+                    placeholder="e.g. Regional Revenue Summary"
+                    className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 text-foreground"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                    Description
+                  </label>
+                  <textarea
+                    value={reportDescription}
+                    onChange={(e) => setReportDescription(e.target.value)}
+                    placeholder="Provide a summary of the compiled database query details..."
+                    rows={3}
+                    className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 text-foreground resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsSaveModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-lg border border-border hover:bg-secondary text-xs font-semibold text-foreground transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveReportSubmit}
+                  disabled={isSaving}
+                  className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary/95 text-primary-foreground text-xs font-semibold transition-colors cursor-pointer shadow-md shadow-primary/10 flex items-center gap-1.5"
+                >
+                  {isSaving ? "Saving..." : "Save Report"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

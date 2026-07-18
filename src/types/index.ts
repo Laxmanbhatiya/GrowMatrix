@@ -216,6 +216,7 @@ export interface UserSession {
   email: string;
   role: SystemRole;
   avatar?: string;
+  password?: string;
   attributes: {
     region: string[];      // e.g. ["Midwest", "West"] -> for row-level security (RLS)
     department: string;    // e.g. "Agronomy", "Sales", "Finance"

@@ -16,7 +16,8 @@ import {
   Grid, 
   Star,
   BookOpen,
-  Folder
+  Folder,
+  Sprout
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useDbStore } from "@/store/dbStore";
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
       { name: "Dashboard", href: "/", icon: LayoutDashboard, feature: "dashboard" },
       { name: "Report Library", href: "/reports?tab=library", icon: BookOpen, feature: "report_builder" },
       { name: "Report Builder", href: "/reports/builder", icon: FileSpreadsheet, feature: "report_builder" },
+      { name: "Farmer Lookup", href: "/reports/farmer-lookup", icon: Sprout, feature: "report_builder" },
     ]
   },
   {

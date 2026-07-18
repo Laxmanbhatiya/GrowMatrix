@@ -5,7 +5,7 @@ import { Settings, RefreshCw, Trash2, ShieldAlert } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
 
 export default function WorkspaceSettingsPage() {
-  const { resetDatabase, fetchDatasets } = useDbStore();
+  const { resetDatabase, fetchDatasets, fetchCurrentUser } = useDbStore();
   const [resetting, setResetting] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);

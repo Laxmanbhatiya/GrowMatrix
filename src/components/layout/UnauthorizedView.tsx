@@ -1,11 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { ShieldAlert, RefreshCw, KeyRound } from "lucide-react";
+import { ShieldAlert, RefreshCw, KeyRound, ArrowLeft } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
 
 export function UnauthorizedView() {
   const { currentUser, switchSessionRole } = useDbStore();
+
+  // Only Admin/Analyst can switch — Viewer cannot escalate their own role
+  const canSwitchRole = currentUser.role === "Admin" || currentUser.role === "Analyst";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 font-sans select-none text-center">
@@ -35,24 +38,35 @@ export function UnauthorizedView() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <button
-          onClick={() => {
-            switchSessionRole("Admin");
-            window.location.reload();
-          }}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/95 transition-all shadow-sm duration-150"
-        >
-          <RefreshCw size={13} />
-          <span>Switch to Admin Mode</span>
-        </button>
+        {/* Only show Switch to Admin Mode for Admin/Analyst — Viewer can NEVER escalate */}
+        {canSwitchRole && (
+          <button
+            onClick={() => {
+              switchSessionRole("Admin");
+              window.location.reload();
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/95 transition-all shadow-sm duration-150"
+          >
+            <RefreshCw size={13} />
+            <span>Switch to Admin Mode</span>
+          </button>
+        )}
         
         <button
           onClick={() => window.history.back()}
-          className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border rounded-md hover:bg-secondary transition-colors duration-150"
+          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border rounded-md hover:bg-secondary transition-colors duration-150"
         >
+          <ArrowLeft size={13} />
           Go Back
         </button>
       </div>
+
+      {/* Viewer-specific hint */}
+      {!canSwitchRole && (
+        <p className="mt-4 text-[11px] text-muted-foreground/60 max-w-xs">
+          Contact your administrator to request access to this section.
+        </p>
+      )}
     </div>
   );
 }

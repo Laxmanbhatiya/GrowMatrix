@@ -5,15 +5,15 @@ import { Dataset, Relationship, GrowMatrixReport, Dashboard, UserSession, RolePe
 
 const API_BASE = "http://localhost:3001/api";
 
-const DEFAULT_USER: UserSession = {
-  id: "usr_admin",
-  name: "Admin User",
-  email: "admin@growindigo.co.in",
-  role: "Admin",
-  avatar: "A",
+const EMPTY_USER: UserSession = {
+  id: "",
+  name: "",
+  email: "",
+  role: "Viewer",
+  avatar: "G",
   attributes: {
-    region: ["Maharashtra", "Rajasthan", "Gujarat"],
-    department: "Sales"
+    region: [],
+    department: ""
   }
 };
 
@@ -32,10 +32,23 @@ const DEFAULT_ROLE_PERMISSIONS: RolePermissions[] = [
   }
 ];
 
-// Helper to make fetch calls safer
+// Helper to make fetch calls safer and inject JWT auth headers
 const fetchJson = async (url: string, options?: RequestInit) => {
   try {
-    const res = await fetch(url, options);
+    const token = typeof window !== 'undefined' ? localStorage.getItem("growmatrix_token") : null;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(options?.headers as Record<string, string> || {}),
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
+      ...options,
+      headers
+    });
     if (res.status === 404) {
       return null; // Quietly ignore unimplemented backend endpoints
     }
@@ -57,6 +70,9 @@ interface DbState {
   rolePermissions: RolePermissions[];
   currentUser: UserSession;
   hiddenFeatures: Record<string, boolean>;
+  notification: { message: string; type: "success" | "error" | "info" } | null;
+  showNotification: (message: string, type?: "success" | "error" | "info") => void;
+  hideNotification: () => void;
   
   // Fetch Actions
   fetchDatasets: () => Promise<void>;
@@ -80,6 +96,11 @@ interface DbState {
   toggleFeatureVisibility: (featureId: string) => void;
   switchSessionRole: (role: SystemRole) => Promise<void>;
   resetDatabase: () => Promise<void>;
+  
+  // Auth Actions
+  login: (email: string, password: string) => Promise<boolean>;
+  loginWithSso: (payload: { ssoId: string; email: string; name: string; avatar?: string; role?: string }) => Promise<boolean>;
+  logout: () => void;
 }
 
 export const useDbStore = create<DbState>((set, get) => ({
@@ -87,10 +108,21 @@ export const useDbStore = create<DbState>((set, get) => ({
   relationships: [],
   reports: [],
   dashboards: [],
-  users: [DEFAULT_USER],
+  users: [],
   rolePermissions: DEFAULT_ROLE_PERMISSIONS,
-  currentUser: DEFAULT_USER,
+  currentUser: EMPTY_USER,
   hiddenFeatures: {},
+  notification: null,
+  showNotification: (message, type = "success") => {
+    set({ notification: { message, type } });
+    setTimeout(() => {
+      const current = get().notification;
+      if (current && current.message === message) {
+        set({ notification: null });
+      }
+    }, 4000);
+  },
+  hideNotification: () => set({ notification: null }),
 
   // Fetch Implementations
   fetchDatasets: async () => {
@@ -273,32 +305,15 @@ export const useDbStore = create<DbState>((set, get) => ({
   },
 
   switchSessionRole: async (role) => {
-    const targetUser = get().users.find((u) => u.role === role);
-    if (targetUser) {
-      set({ currentUser: targetUser });
-    } else {
-      const fallbackUser: UserSession = {
-        id: `usr_${role.toLowerCase()}`,
-        name: `Mock ${role}`,
-        email: `${role.toLowerCase()}@growindigo.co.in`,
-        role,
-        avatar: role[0],
-        attributes: {
-          region: role === 'Admin' ? ["Maharashtra", "Rajasthan", "Gujarat"] : ["Maharashtra"],
-          department: "Sales"
-        }
-      };
-      set({
-        users: [...get().users, fallbackUser],
-        currentUser: fallbackUser
-      });
-    }
-
-    await fetchJson(`${API_BASE}/users/switch-role`, {
+    const resData = await fetchJson(`${API_BASE}/users/switch-role`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role })
     });
+    if (resData && resData.token && resData.user) {
+      localStorage.setItem("growmatrix_token", resData.token);
+      set({ currentUser: resData.user });
+    }
   },
 
   resetDatabase: async () => {
@@ -307,11 +322,57 @@ export const useDbStore = create<DbState>((set, get) => ({
       relationships: [],
       reports: [],
       dashboards: [],
-      users: [DEFAULT_USER],
+      users: [],
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
-      currentUser: DEFAULT_USER,
-      hiddenFeatures: {}
+      // NOTE: currentUser is intentionally NOT reset — session must survive cache reset
     });
     await fetchJson(`${API_BASE}/reset`, { method: "POST" });
+  },
+
+  login: async (email, password) => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      if (!res.ok) return false;
+      const json = await res.json();
+      if (json.success && json.data?.token) {
+        localStorage.setItem("growmatrix_token", json.data.token);
+        set({ currentUser: json.data.user });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Login failed:", error);
+      return false;
+    }
+  },
+
+  loginWithSso: async (payload) => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/sso/callback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) return false;
+      const json = await res.json();
+      if (json.success && json.data?.token) {
+        localStorage.setItem("growmatrix_token", json.data.token);
+        set({ currentUser: json.data.user });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("SSO Login failed:", error);
+      return false;
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem("growmatrix_token");
+    set({ currentUser: EMPTY_USER });
   }
 }));
