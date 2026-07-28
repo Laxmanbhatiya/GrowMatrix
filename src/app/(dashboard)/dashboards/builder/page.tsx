@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Grid, Plus, AlertCircle } from "lucide-react";
+import { Grid, AlertCircle } from "lucide-react";
 
 export default function DashboardBuilderPage() {
   return (

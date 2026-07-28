@@ -1,19 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { Users, Shield, UserCheck, Edit2, UserPlus } from "lucide-react";
+import { Users, Shield, Edit2, UserPlus } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
 import { motion, AnimatePresence } from "framer-motion";
+import { SystemRole, UserSession } from "@/types";
 
 export default function UsersManagementPage() {
-  const { users, currentUser, switchSessionRole, fetchUsers, updateUser, addUser, showNotification } = useDbStore();
-  const [loading, setLoading] = React.useState(false);
+  const { users, currentUser, fetchUsers, updateUser, addUser, showNotification } = useDbStore();
 
   // Edit user modal & form states
-  const [editingUser, setEditingUser] = React.useState<any | null>(null);
+  const [editingUser, setEditingUser] = React.useState<UserSession | null>(null);
   const [editName, setEditName] = React.useState("");
   const [editEmail, setEditEmail] = React.useState("");
-  const [editRole, setEditRole] = React.useState<"Admin" | "Analyst" | "Viewer">("Viewer");
+  const [editRole, setEditRole] = React.useState<SystemRole>("Viewer");
   const [editDept, setEditDept] = React.useState("");
   const [editRegions, setEditRegions] = React.useState<string[]>([]);
 
@@ -22,17 +22,17 @@ export default function UsersManagementPage() {
   const [addName, setAddName] = React.useState("");
   const [addEmail, setAddEmail] = React.useState("");
   const [addPassword, setAddPassword] = React.useState("");
-  const [addRole, setAddRole] = React.useState<"Admin" | "Analyst" | "Viewer">("Viewer");
+  const [addRole, setAddRole] = React.useState<SystemRole>("Viewer");
   const [addDept, setAddDept] = React.useState("");
   const [addRegions, setAddRegions] = React.useState<string[]>([]);
 
   React.useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
 
   // Edit user handlers
-  const handleOpenEditModal = (user: any) => {
+  const handleOpenEditModal = (user: UserSession) => {
     setEditingUser(user);
     setEditName(user.name);
     setEditEmail(user.email);
@@ -42,6 +42,7 @@ export default function UsersManagementPage() {
   };
 
   const handleSaveChanges = async () => {
+    if (!editingUser) return;
     if (!editName.trim() || !editEmail.trim()) {
       showNotification("Name and email are required.", "error");
       return;
@@ -262,7 +263,7 @@ export default function UsersManagementPage() {
                   </label>
                   <select
                     value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as any)}
+                    onChange={(e) => setEditRole(e.target.value as SystemRole)}
                     className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 text-foreground cursor-pointer"
                   >
                     <option value="Admin">Admin</option>
@@ -405,7 +406,7 @@ export default function UsersManagementPage() {
                   </label>
                   <select
                     value={addRole}
-                    onChange={(e) => setAddRole(e.target.value as any)}
+                    onChange={(e) => setAddRole(e.target.value as SystemRole)}
                     className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 focus:outline-none focus:border-primary/50 text-foreground cursor-pointer"
                   >
                     <option value="Admin">Admin</option>

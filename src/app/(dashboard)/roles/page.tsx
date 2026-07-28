@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ShieldAlert, Check, ShieldCheck, Lock } from "lucide-react";
+import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
 
 export default function RolesPermissionsPage() {

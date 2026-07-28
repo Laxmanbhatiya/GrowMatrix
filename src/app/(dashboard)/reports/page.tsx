@@ -95,7 +95,7 @@ function ReportsIndexContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTables.length === 0 ? (
             <div className="col-span-full border border-border border-dashed rounded-xl p-16 text-center text-xs text-muted-foreground italic">
-              No tables found matching "{searchQuery}"
+              No tables found matching &quot;{searchQuery}&quot;
             </div>
           ) : (
             filteredTables.map(d => (

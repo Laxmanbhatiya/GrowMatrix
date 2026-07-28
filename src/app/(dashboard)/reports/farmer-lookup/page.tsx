@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/utils/cn";
 
 interface FarmerInfo {
   id: string;
@@ -74,6 +73,13 @@ interface Attestation {
   isActive: boolean;
 }
 
+type TableRow = Record<string, string | number | boolean | null>;
+
+interface TableEntry {
+  tableName: string;
+  rows: TableRow[];
+}
+
 interface LookupResult {
   farmer: FarmerInfo;
   aadhaar: AadhaarInfo;
@@ -81,10 +87,27 @@ interface LookupResult {
   fields: FieldPlot[];
   agreements: Agreement[];
   attestations: Attestation[];
-  tableEntries?: {
-    tableName: string;
-    rows: any[];
-  }[];
+  tableEntries?: TableEntry[];
+}
+
+// Minimal shape of the Leaflet global loaded on-demand via CDN script tag
+interface LeafletLayer {
+  addTo: (map: LeafletMap) => LeafletLayer;
+  bindPopup: (html: string, options?: Record<string, unknown>) => LeafletLayer;
+  openPopup: () => void;
+}
+
+interface LeafletMap {
+  setView: (center: [number, number], zoom: number, options?: Record<string, unknown>) => LeafletMap;
+  remove: () => void;
+}
+
+interface LeafletStatic {
+  map: (el: HTMLElement) => LeafletMap;
+  tileLayer: (url: string, options?: Record<string, unknown>) => LeafletLayer;
+  polygon: (coords: [number, number][], options?: Record<string, unknown>) => LeafletLayer;
+  circle: (center: [number, number], options?: Record<string, unknown>) => LeafletLayer;
+  geoJSON: (data: unknown, options?: Record<string, unknown>) => LeafletLayer;
 }
 
 function FarmerLookupContent() {
@@ -100,7 +123,7 @@ function FarmerLookupContent() {
   const [prefLoading, setPrefLoading] = React.useState(false);
 
   // Table data lazy-load state
-  const [tableEntriesData, setTableEntriesData] = React.useState<any[]>([]);
+  const [tableEntriesData, setTableEntriesData] = React.useState<TableEntry[]>([]);
   const [isTableLoading, setIsTableLoading] = React.useState(false);
   const [tablesLoaded, setTablesLoaded] = React.useState(false);
 
@@ -208,7 +231,7 @@ function FarmerLookupContent() {
     }
   };
 
-  const triggerSearch = async (val: string) => {
+  const triggerSearch = React.useCallback(async (val: string) => {
     setIsLoading(true);
     try {
       const res = await fetch(`http://localhost:3001/api/farmer/lookup?search=${encodeURIComponent(val)}&userId=${currentUser?.id || ''}`);
@@ -221,7 +244,7 @@ function FarmerLookupContent() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentUser]);
 
   React.useEffect(() => {
     if (searchParamVal) {
@@ -229,12 +252,12 @@ function FarmerLookupContent() {
       setSearchQuery(cleanVal);
       triggerSearch(cleanVal);
     }
-  }, [searchParamVal, currentUser]);
+  }, [searchParamVal, triggerSearch]);
 
   // Map reference & instance storage
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
-  const mapInstanceRef = React.useRef<any>(null);
-  const markersRef = React.useRef<any[]>([]);
+  const mapInstanceRef = React.useRef<LeafletMap | null>(null);
+  const markersRef = React.useRef<{ fieldId: string; marker: LeafletLayer; lat: number; lng: number }[]>([]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,7 +281,7 @@ function FarmerLookupContent() {
       } else {
         showNotification(json.error || "Failed to search farmer details.", "error");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       showNotification("Backend lookup API is unreachable.", "error");
     } finally {
@@ -280,8 +303,8 @@ function FarmerLookupContent() {
     script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
     
     script.onload = () => {
-      const L = (window as any).L;
-      if (!L) return;
+      const L = (window as unknown as { L: LeafletStatic }).L;
+      if (!L || !mapContainerRef.current) return;
 
       // Reset map instance if already initialized
       if (mapInstanceRef.current) {
@@ -322,7 +345,7 @@ function FarmerLookupContent() {
           const lng = parseFloat(parts[1]);
           if (isNaN(lat) || isNaN(lng)) return;
 
-          let layer: any;
+          let layer: LeafletLayer;
 
           if (field.polygon && field.polygon.length > 0) {
             // Draw actual polygon tagged area boundary
@@ -393,7 +416,7 @@ function FarmerLookupContent() {
 
   // Center Map on a specific field click
   const focusField = (field: FieldPlot) => {
-    const L = (window as any).L;
+    const L = (window as unknown as { L: LeafletStatic }).L;
     if (!L || !mapInstanceRef.current) return;
 
     const targetMarker = markersRef.current.find(m => m.fieldId === field.id);
@@ -826,7 +849,7 @@ function FarmerLookupContent() {
                     <p className="text-[10px] text-muted-foreground/60">Try adjusting the Table Settings to include more tables.</p>
                   </div>
                 ) : (
-                  tableEntriesData.map((table: any) => (
+                  tableEntriesData.map((table) => (
                     <div key={table.tableName} className="bg-card border border-border/40 rounded-xl overflow-hidden shadow-sm">
                       {/* Header */}
                       <div className="px-4 py-2.5 bg-secondary/10 border-b border-border/30 flex items-center justify-between">
@@ -851,7 +874,7 @@ function FarmerLookupContent() {
                             </tr>
                           </thead>
                           <tbody>
-                            {table.rows.map((row: any, idx: number) => (
+                            {table.rows.map((row, idx: number) => (
                               <tr key={idx} className="border-b border-border/20 hover:bg-secondary/15 last:border-b-0">
                                 {Object.keys(row || {}).map((col) => {
                                   const val = row[col];

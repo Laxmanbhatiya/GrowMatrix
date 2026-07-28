@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy 
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Search, GripVertical, Check, Star, Pin, EyeOff } from "lucide-react";
+import { Search, GripVertical, Check, EyeOff } from "lucide-react";
 import { SemanticField } from "@/types";
 import { cn } from "@/utils/cn";
 
@@ -26,20 +26,12 @@ import { cn } from "@/utils/cn";
 interface SortableItemProps {
   id: string;
   field: SemanticField;
-  isPinned: boolean;
-  isFavorite: boolean;
-  onTogglePin: () => void;
-  onToggleFavorite: () => void;
   onRemove: () => void;
 }
 
 function SortableFieldRow({
   id,
   field,
-  isPinned,
-  isFavorite,
-  onTogglePin,
-  onToggleFavorite,
   onRemove
 }: SortableItemProps) {
   const {
@@ -107,10 +99,6 @@ export function ColumnPicker({
   onChange
 }: ColumnPickerProps) {
   const [search, setSearch] = React.useState("");
-  
-  // Custom states for pinning and favorites column metrics
-  const [pinnedIds, setPinnedIds] = React.useState<string[]>([]);
-  const [favoriteIds, setFavoriteIds] = React.useState<string[]>([]);
 
   // DND Kit Sensors
   const sensors = useSensors(
@@ -144,18 +132,6 @@ export function ColumnPicker({
       const newIndex = selectedFieldIds.indexOf(String(over.id));
       onChange(arrayMove(selectedFieldIds, oldIndex, newIndex));
     }
-  };
-
-  const handleTogglePin = (fieldId: string) => {
-    setPinnedIds((prev) =>
-      prev.includes(fieldId) ? prev.filter((id) => id !== fieldId) : [...prev, fieldId]
-    );
-  };
-
-  const handleToggleFavorite = (fieldId: string) => {
-    setFavoriteIds((prev) =>
-      prev.includes(fieldId) ? prev.filter((id) => id !== fieldId) : [...prev, fieldId]
-    );
   };
 
   return (
@@ -247,10 +223,6 @@ export function ColumnPicker({
                       key={id}
                       id={id}
                       field={field}
-                      isPinned={pinnedIds.includes(id)}
-                      isFavorite={favoriteIds.includes(id)}
-                      onTogglePin={() => handleTogglePin(id)}
-                      onToggleFavorite={() => handleToggleFavorite(id)}
                       onRemove={() => handleCheckboxToggle(id)}
                     />
                   );

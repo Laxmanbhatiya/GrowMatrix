@@ -2,26 +2,20 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { 
-  TrendingUp, 
-  Database, 
-  FileSpreadsheet, 
-  ShieldAlert, 
-  Users, 
-  Activity, 
-  Star, 
+import {
+  TrendingUp,
+  Database,
+  FileSpreadsheet,
+  Users,
+  Star,
   ArrowRight,
-  HelpCircle,
   Plus,
   LayoutDashboard,
-  Grid
 } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
-import { usePermissions } from "@/hooks/usePermissions";
 
 export default function DashboardHomePage() {
-  const { datasets, reports, dashboards, currentUser } = useDbStore();
-  const { hasWriteAccess } = usePermissions();
+  const { datasets, reports, currentUser } = useDbStore();
 
   const totalTables = datasets.length;
   const totalRows = React.useMemo(() => {

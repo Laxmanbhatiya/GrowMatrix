@@ -75,7 +75,7 @@ export type FilterOperator =
 export interface FilterRule {
   field: string; // logical semantic field ID
   operator: FilterOperator;
-  value: any; // string, number, array of values, or bounds
+  value: string | number | boolean | null | (string | number)[]; // scalar, array of values, or [start, end] bounds
 }
 
 export interface FilterGroup {

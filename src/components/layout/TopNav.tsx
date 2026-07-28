@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Search, Bell, Sun, Moon, Sparkles, LogOut, ChevronDown, User, Settings } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
@@ -10,7 +9,6 @@ import { useCommandPaletteStore } from "@/store/commandPaletteStore";
 import { Breadcrumbs } from "./Breadcrumbs";
 
 export function TopNav() {
-  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { currentUser, logout } = useDbStore();
   const { setIsOpen: setOpenSearch } = useCommandPaletteStore();

@@ -30,6 +30,14 @@ import { cn } from "@/utils/cn";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
 
+// Dynamic messages for the premium global loading overlay
+const LOADING_MESSAGES = [
+  "Connecting to Snowflake database...",
+  "Compiling AQN logical check trees...",
+  "Executing query on active warehouse...",
+  "Mapping and structure-formatting records..."
+];
+
 export default function ReportBuilderPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -264,7 +272,8 @@ export default function ReportBuilderPage() {
         rules: baseRules
       }));
     }
-  }, [quickDateCol, quickStartDate, quickEndDate]);
+    // filters.rules intentionally excluded: this effect rewrites it, so including it would loop
+  }, [quickDateCol, quickStartDate, quickEndDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --------------------------------------------------
   // UI Display States
@@ -276,13 +285,6 @@ export default function ReportBuilderPage() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [queryExecuted, setQueryExecuted] = React.useState(false);
   
-  // Dynamic messages for the premium global loading overlay
-  const LOADING_MESSAGES = [
-    "Connecting to Snowflake database...",
-    "Compiling AQN logical check trees...",
-    "Executing query on active warehouse...",
-    "Mapping and structure-formatting records..."
-  ];
   const [loadingMessageIdx, setLoadingMessageIdx] = React.useState(0);
 
   React.useEffect(() => {

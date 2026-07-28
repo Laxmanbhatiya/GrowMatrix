@@ -39,7 +39,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     fetchRolePermissions, 
     fetchCurrentUser,
     login,
-    loginWithSso,
     notification,
     showNotification,
     hideNotification
@@ -76,7 +75,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           setIsAuthenticated(false);
         });
     }
-  }, []);
+  }, [fetchCurrentUser]);
 
   // Fetch application registries only AFTER successful authentication
   React.useEffect(() => {
@@ -88,7 +87,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       fetchUsers();
       fetchRolePermissions();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchDatasets, fetchRelationships, fetchReports, fetchDashboards, fetchUsers, fetchRolePermissions]);
 
   // First boot splash screen triggering after login
   React.useEffect(() => {
@@ -117,7 +116,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       } else {
         setLoginError("Invalid email or password");
       }
-    } catch (err) {
+    } catch {
       setLoginError("Connection failed. Please check local MongoDB.");
     } finally {
       setIsSubmitting(false);

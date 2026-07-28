@@ -7,9 +7,11 @@ import { Download, Maximize2, Minimize2, BarChart2 } from "lucide-react";
 import { ChartType } from "@/types";
 import { cn } from "@/utils/cn";
 
+type ChartDataRow = Record<string, string | number>;
+
 interface BaseChartProps {
   type: ChartType;
-  data: any[];
+  data: ChartDataRow[];
   xAxisKey?: string; // For Category-based charts (Bar, Line, Area)
   valueKeys?: string[]; // Metric columns (orderValue, yield, etc.)
   title?: string;
@@ -90,7 +92,7 @@ export function BaseChart({
     const categories = data.map(item => String(item[xKey] || ""));
 
     // Base Common options
-    let option: any = {
+    const option: Record<string, unknown> = {
       color: colors,
       backgroundColor: "transparent",
       title: {
@@ -275,7 +277,7 @@ export function BaseChart({
       case "radar": {
         // Find max values to map radar indicators
         const metricKey = yKeys[0];
-        const maxVal = Math.max(...data.map(item => item[metricKey] || 0)) * 1.1;
+        const maxVal = Math.max(...data.map(item => Number(item[metricKey]) || 0)) * 1.1;
         const indicators = data.map(item => ({
           name: String(item[xKey] || ""),
           max: maxVal
@@ -311,11 +313,11 @@ export function BaseChart({
         // We will mock dynamic dimensions
         const xFields = data.map(item => String(item[xKey] || ""));
         const yFields = yKeys;
-        const matrixData: any[] = [];
+        const matrixData: [number, number, number][] = [];
         
         data.forEach((item, xIdx) => {
           yKeys.forEach((key, yIdx) => {
-            matrixData.push([xIdx, yIdx, item[key] || 0]);
+            matrixData.push([xIdx, yIdx, Number(item[key]) || 0]);
           });
         });
 
@@ -333,7 +335,7 @@ export function BaseChart({
         };
         option.visualMap = {
           min: 0,
-          max: Math.max(...data.flatMap(item => yKeys.map(k => item[k] || 0))) || 100,
+          max: Math.max(...data.flatMap(item => yKeys.map(k => Number(item[k]) || 0))) || 100,
           calculable: true,
           orient: "horizontal",
           left: "center",
@@ -406,7 +408,7 @@ export function BaseChart({
       }
     }
 
-    chart.setOption(option);
+    chart.setOption(option as echarts.EChartsOption);
   }, [data, xAxisKey, valueKeys, title, type, isDark, showLegend]);
 
   // Initial render & resize trigger hooks

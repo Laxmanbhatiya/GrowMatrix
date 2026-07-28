@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, Database, FileSpreadsheet, ShieldAlert, Users, Settings, Palette, Eye } from "lucide-react";
+import { Search, Database, FileSpreadsheet, ShieldAlert, Users, Settings, Palette, Eye, LucideIcon } from "lucide-react";
 import { useCommandPaletteStore } from "@/store/commandPaletteStore";
 import { useDbStore } from "@/store/dbStore";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -13,7 +13,7 @@ interface SearchItem {
   title: string;
   subtitle: string;
   category: "Pages" | "Datasets" | "Saved Reports";
-  icon: any;
+  icon: LucideIcon;
   action: () => void;
 }
 

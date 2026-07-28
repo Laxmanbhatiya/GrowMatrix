@@ -13,20 +13,18 @@ import {
   ColumnOrderState
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { 
-  Download, 
-  Maximize2, 
-  Minimize2, 
-  ChevronDown, 
-  ArrowUpDown, 
-  Pin, 
-  SlidersHorizontal,
+import {
+  Download,
+  Maximize2,
+  Minimize2,
+  ArrowUpDown,
+  Pin,
   TableProperties
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 interface VirtualTableProps<TData> {
-  columns: ColumnDef<TData, any>[];
+  columns: ColumnDef<TData, unknown>[];
   data: TData[];
   loading?: boolean;
   title?: string;
@@ -102,9 +100,9 @@ export function VirtualTable<TData>({
     
     const csvContent = [
       headers,
-      ...data.map((row: any) =>
+      ...data.map((row) =>
         keys.map(key => {
-          const val = row[key];
+          const val = (row as Record<string, unknown>)[key];
           return typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val;
         }).join(",")
       )

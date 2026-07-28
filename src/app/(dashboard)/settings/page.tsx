@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Settings, RefreshCw, Trash2, ShieldAlert } from "lucide-react";
+import { Settings, RefreshCw, Trash2 } from "lucide-react";
 import { useDbStore } from "@/store/dbStore";
 
 export default function WorkspaceSettingsPage() {
-  const { resetDatabase, fetchDatasets, fetchCurrentUser } = useDbStore();
+  const { resetDatabase, fetchDatasets } = useDbStore();
   const [resetting, setResetting] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -24,8 +24,8 @@ export default function WorkspaceSettingsPage() {
       } else {
         setMessage(`Error: ${data.error}`);
       }
-    } catch (err: any) {
-      setMessage(`Network error: ${err.message}`);
+    } catch (err) {
+      setMessage(`Network error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setRefreshing(false);
     }
@@ -40,8 +40,8 @@ export default function WorkspaceSettingsPage() {
     try {
       await resetDatabase();
       setMessage("In-memory database successfully reset to clean defaults.");
-    } catch (err: any) {
-      setMessage(`Error: ${err.message}`);
+    } catch (err) {
+      setMessage(`Error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setResetting(false);
     }

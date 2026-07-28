@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, ChevronDown, Check, X } from "lucide-react";
+import { Search, ChevronDown, Check } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 interface Option {

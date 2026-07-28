@@ -3,24 +3,20 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  FileSpreadsheet, 
-  Settings, 
-  Users, 
-  ShieldAlert, 
-  Database, 
-  ChevronLeft, 
-  ChevronRight, 
-  FilePlus, 
-  Grid, 
+import {
+  LayoutDashboard,
+  FileSpreadsheet,
+  Settings,
+  Users,
+  ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
+  Grid,
   Star,
   BookOpen,
-  Folder,
   Sprout
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { useDbStore } from "@/store/dbStore";
 import { usePermissions } from "@/hooks/usePermissions";
 
 const NAV_ITEMS = [
@@ -55,16 +51,10 @@ export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { hasReadAccess } = usePermissions();
-  const { reports } = useDbStore();
 
   const [width, setWidth] = React.useState(260);
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isResizing, setIsResizing] = React.useState(false);
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const startResize = React.useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -101,9 +91,6 @@ export function Sidebar() {
       window.removeEventListener("mouseup", stopResize);
     };
   }, [isResizing, resize, stopResize]);
-
-  // Load favorite reports
-  const favoriteReports = reports.filter(r => r.metadata.favorite);
 
   return (
     <aside

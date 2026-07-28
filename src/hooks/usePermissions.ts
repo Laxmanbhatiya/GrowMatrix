@@ -1,7 +1,7 @@
 "use client";
 
 import { useDbStore } from "@/store/dbStore";
-import { Dataset, SystemRole } from "@/types";
+import { Dataset } from "@/types";
 
 export function usePermissions() {
   const { currentUser, rolePermissions, hiddenFeatures } = useDbStore();
